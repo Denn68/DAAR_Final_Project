@@ -1,6 +1,6 @@
 /* ******************************************************
- * Team A Secondary Bot - Scout Chasseur
- * Stratégie: Avance, cherche ennemis, signale et tire
+ * Team A Secondary Bot - Scout Éclaireur
+ * Stratégie: Avance, localise ennemis, signale au Main, puis esquive aléatoirement
  * ******************************************************/
 package algorithms;
 
@@ -13,24 +13,31 @@ import java.util.ArrayList;
 public class TeamASecondaryBotMarssoMougamadoubougary extends Brain {
     // États
     private static final int ADVANCING = 0;
-    private static final int HUNTING = 1;
-    private static final int DODGING = 2;
+    private static final int EVASIVE_TURN = 1;
+    private static final int EVASIVE_MOVE = 2;
+
+    // Directions possibles
+    private static final double[] DIRECTIONS = {
+        Parameters.NORTH,
+        Parameters.SOUTH,
+        Parameters.EAST,
+        Parameters.WEST
+    };
 
     // Variables d'état
     private int currentState;
-    private int dodgeCounter;
-    private int dodgeDirection; // 0 = NORTH, 1 = SOUTH
-    private boolean dodgingPhase2; // true = retour vers EAST
-
-    // Cible en cours de chasse
+    private int moveCounter;
+    private int turnCounter;
+    private double currentDirection;
+    private boolean enemyFound;
+    private int broadcastCooldown;
     private double targetDirection;
-    private double targetDistance;
 
     // Constantes
-    private static final double HEADINGPRECISION = 0.01;
-    private static final int DODGE_STEPS = 50;
-    private static final double HUNTING_DISTANCE = 300;
+    private static final int MOVE_STEPS = 70;          // Steps pour avancer
+    private static final int TURN_STEPS = 40;          // Steps pour tourner
     private static final int FIRE_LATENCY = 20;
+    private static final int BROADCAST_COOLDOWN = 100;
 
     private int fireCounter;
 
@@ -40,174 +47,154 @@ public class TeamASecondaryBotMarssoMougamadoubougary extends Brain {
 
     public void activate() {
         currentState = ADVANCING;
-        dodgeCounter = 0;
-        dodgingPhase2 = false;
+        moveCounter = 0;
+        turnCounter = 0;
         fireCounter = 0;
+        enemyFound = false;
+        broadcastCooldown = 0;
+        currentDirection = Parameters.EAST;
         sendLogMessage("Scout A activé - Mode ADVANCING");
     }
 
     public void step() {
-        // Décrémenter compteur de tir
         if (fireCounter > 0) fireCounter--;
+        if (broadcastCooldown > 0) broadcastCooldown--;
+
+        // Scanner et tirer si ennemi visible
+        scanAndFire();
 
         switch (currentState) {
             case ADVANCING:
                 stepAdvancing();
                 break;
-            case HUNTING:
-                stepHunting();
+            case EVASIVE_TURN:
+                stepEvasiveTurn();
                 break;
-            case DODGING:
-                stepDodging();
+            case EVASIVE_MOVE:
+                stepEvasiveMove();
                 break;
         }
     }
 
-    private void stepAdvancing() {
-        // Scanner le radar pour les ennemis
+    private void scanAndFire() {
         ArrayList<IRadarResult> radarResults = detectRadar();
-
         for (IRadarResult r : radarResults) {
             if (isEnemy(r.getObjectType())) {
-                // Ennemi trouvé - signaler et passer en HUNTING
                 targetDirection = r.getObjectDirection();
-                targetDistance = r.getObjectDistance();
 
-                // Broadcast position aux coéquipiers
-                broadcast("ENEMY:" + targetDirection + ":" + targetDistance);
-                sendLogMessage("Ennemi détecté! Direction: " + targetDirection);
+                if (!enemyFound) {
+                    enemyFound = true;
+                    broadcast("ENEMY_FOUND");
+                    sendLogMessage("ENNEMI TROUVÉ! Signal envoyé");
+                }
 
-                currentState = HUNTING;
+                if (broadcastCooldown == 0) {
+                    broadcast("ENEMY_FOUND");
+                    broadcastCooldown = BROADCAST_COOLDOWN;
+                }
+
+                if (fireCounter == 0) {
+                    fire(targetDirection);
+                    fireCounter = FIRE_LATENCY;
+                }
+                return;
+            }
+        }
+    }
+
+    private void stepAdvancing() {
+        // Chercher les ennemis
+        ArrayList<IRadarResult> radarResults = detectRadar();
+        for (IRadarResult r : radarResults) {
+            if (isEnemy(r.getObjectType())) {
+                enemyFound = true;
+                broadcast("ENEMY_FOUND");
+                sendLogMessage("Ennemi détecté! Mode EVASIVE");
+                startEvasive();
                 return;
             }
         }
 
         // Vérifier si bloqué
-        IFrontSensorResult front = detectFront();
-        if (front.getObjectType() != IFrontSensorResult.Types.NOTHING) {
-            startDodging();
+        if (isBlocked()) {
+            startEvasive();
             return;
         }
 
-        // Continuer à avancer vers EAST
-        if (!isHeading(Parameters.EAST)) {
-            turnToward(Parameters.EAST);
+        // Avancer vers EAST
+        if (!isHeadingTo(Parameters.EAST)) {
+            turnTo(Parameters.EAST);
         } else {
             move();
         }
     }
 
-    private void stepHunting() {
-        // Scanner pour retrouver l'ennemi
-        ArrayList<IRadarResult> radarResults = detectRadar();
-        IRadarResult closestEnemy = null;
-        double closestDistance = Double.MAX_VALUE;
+    private void stepEvasiveTurn() {
+        // Tourner vers la direction choisie
+        turnCounter--;
 
-        for (IRadarResult r : radarResults) {
-            if (isEnemy(r.getObjectType())) {
-                if (r.getObjectDistance() < closestDistance) {
-                    closestEnemy = r;
-                    closestDistance = r.getObjectDistance();
-                }
-            }
-        }
-
-        if (closestEnemy == null) {
-            // Ennemi perdu ou mort - retour en ADVANCING
-            sendLogMessage("Cible perdue - Retour en ADVANCING");
-            currentState = ADVANCING;
-            return;
-        }
-
-        // Mettre à jour la cible
-        targetDirection = closestEnemy.getObjectDirection();
-        targetDistance = closestEnemy.getObjectDistance();
-
-        // Tirer sur l'ennemi
-        if (fireCounter == 0) {
-            fire(targetDirection);
-            fireCounter = FIRE_LATENCY;
-        }
-
-        // Se rapprocher si trop loin (garder distance ~300)
-        if (targetDistance > HUNTING_DISTANCE + 50) {
-            // Vérifier si bloqué
-            IFrontSensorResult front = detectFront();
-            if (front.getObjectType() != IFrontSensorResult.Types.NOTHING) {
-                startDodging();
-                return;
-            }
-
-            // Se tourner vers l'ennemi et avancer
-            if (!isHeading(targetDirection)) {
-                turnToward(targetDirection);
-            } else {
-                move();
-            }
-        } else if (targetDistance < HUNTING_DISTANCE - 50) {
-            // Trop proche - reculer un peu
-            moveBack();
-        }
-        // Sinon rester à distance et continuer à tirer
-    }
-
-    private void stepDodging() {
-        if (!dodgingPhase2) {
-            // Phase 1: Monter ou descendre
-            if (dodgeCounter > 0) {
-                dodgeCounter--;
-                double dodgeDir = (dodgeDirection == 0) ? Parameters.NORTH : Parameters.SOUTH;
-                if (!isHeading(dodgeDir)) {
-                    turnToward(dodgeDir);
-                } else {
-                    move();
-                }
-            } else {
-                // Phase 2: Revenir vers EAST
-                dodgingPhase2 = true;
-                dodgeCounter = DODGE_STEPS;
-            }
+        if (isHeadingTo(currentDirection) || turnCounter <= 0) {
+            // Fini de tourner -> passer en MOVE
+            currentState = EVASIVE_MOVE;
+            moveCounter = MOVE_STEPS;
+            sendLogMessage("Tourné -> avancer " + dirName(currentDirection));
         } else {
-            // Phase 2: Retourner vers EAST
-            if (!isHeading(Parameters.EAST)) {
-                turnToward(Parameters.EAST);
-            } else {
-                // Retour en ADVANCING
-                sendLogMessage("Fin esquive - Retour en ADVANCING");
-                currentState = ADVANCING;
-                dodgingPhase2 = false;
-            }
+            turnTo(currentDirection);
         }
     }
 
-    private void startDodging() {
-        currentState = DODGING;
-        dodgeCounter = DODGE_STEPS;
-        dodgingPhase2 = false;
-        // Choisir direction basée sur position (alternance simple)
-        dodgeDirection = (Math.random() > 0.5) ? 0 : 1;
-        sendLogMessage("Obstacle détecté - Esquive vers " + (dodgeDirection == 0 ? "NORTH" : "SOUTH"));
+    private void stepEvasiveMove() {
+        // Avancer dans la direction
+        moveCounter--;
+
+        if (isBlocked() || moveCounter <= 0) {
+            // Bloqué ou fini -> nouvelle direction aléatoire
+            startEvasive();
+        } else {
+            move();
+        }
+    }
+
+    private void startEvasive() {
+        currentState = EVASIVE_TURN;
+        turnCounter = TURN_STEPS;
+        // Choisir une direction aléatoire
+        currentDirection = DIRECTIONS[(int)(Math.random() * 4)];
+        sendLogMessage("EVASIVE: tourner vers " + dirName(currentDirection));
+    }
+
+    private String dirName(double dir) {
+        if (dir == Parameters.NORTH) return "NORTH";
+        if (dir == Parameters.SOUTH) return "SOUTH";
+        if (dir == Parameters.EAST) return "EAST";
+        if (dir == Parameters.WEST) return "WEST";
+        return "?";
+    }
+
+    private boolean isBlocked() {
+        IFrontSensorResult front = detectFront();
+        return front.getObjectType() != IFrontSensorResult.Types.NOTHING &&
+               front.getObjectType() != IFrontSensorResult.Types.TeamMainBot &&
+               front.getObjectType() != IFrontSensorResult.Types.TeamSecondaryBot;
+    }
+
+    private boolean isHeadingTo(double dir) {
+        double diff = Math.abs(getHeading() - dir);
+        while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
+        return diff < 0.1;
+    }
+
+    private void turnTo(double dir) {
+        double diff = dir - getHeading();
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+
+        if (diff > 0) stepTurn(Parameters.Direction.RIGHT);
+        else stepTurn(Parameters.Direction.LEFT);
     }
 
     private boolean isEnemy(IRadarResult.Types type) {
         return type == IRadarResult.Types.OpponentMainBot ||
                type == IRadarResult.Types.OpponentSecondaryBot;
-    }
-
-    private boolean isHeading(double dir) {
-        return Math.abs(Math.sin(getHeading() - dir)) < HEADINGPRECISION;
-    }
-
-    private void turnToward(double targetDir) {
-        double diff = targetDir - getHeading();
-        // Normaliser entre -PI et PI
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
-
-        if (diff > 0) {
-            stepTurn(Parameters.Direction.RIGHT);
-        } else {
-            stepTurn(Parameters.Direction.LEFT);
-        }
     }
 }
