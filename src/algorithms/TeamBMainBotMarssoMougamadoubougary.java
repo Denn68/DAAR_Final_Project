@@ -1,6 +1,6 @@
 /* ******************************************************
  * Team B Main Bot - Défenseur
- * Stratégie: Positionne, avance, scanne 360°, tient et tire
+ * Stratégie: Avance, détecte, tient et tire (sans scan 360° inutile)
  * ******************************************************/
 package algorithms;
 
@@ -12,32 +12,24 @@ import java.util.ArrayList;
 
 public class TeamBMainBotMarssoMougamadoubougary extends Brain {
     // États
-    private static final int POSITIONING = 0;
-    private static final int ADVANCING = 1;
-    private static final int SCANNING = 2;
-    private static final int HOLDING = 3;
-    private static final int DODGING = 4;
+    private static final int ADVANCING = 0;
+    private static final int HOLDING = 1;
+    private static final int DODGING = 2;
 
     // Variables d'état
     private int currentState;
-    private int previousState; // Pour revenir après DODGING
+    private int previousState;
     private int stepCounter;
     private int dodgeCounter;
-    private int dodgeDirection; // 0 = NORTH, 1 = SOUTH
+    private int dodgeDirection;
     private boolean dodgingPhase2;
-
-    // Scan 360°
-    private double scanStartHeading;
-    private double totalScanned;
 
     // Cible en cours
     private double targetDirection;
-    private double targetDistance;
 
     // Constantes
     private static final double HEADINGPRECISION = 0.01;
-    private static final int POSITIONING_STEPS = 100;
-    private static final int ADVANCING_STEPS = 80;
+    private static final int ADVANCING_STEPS = 100;
     private static final int DODGE_STEPS = 50;
     private static final int FIRE_LATENCY = 20;
 
@@ -48,29 +40,24 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
     }
 
     public void activate() {
-        currentState = POSITIONING;
+        currentState = ADVANCING;
         previousState = ADVANCING;
-        stepCounter = POSITIONING_STEPS;
+        stepCounter = ADVANCING_STEPS;
         dodgeCounter = 0;
         dodgingPhase2 = false;
         fireCounter = 0;
-        totalScanned = 0;
-        sendLogMessage("Défenseur B activé - Mode POSITIONING");
+        sendLogMessage("Défenseur B activé - Mode ADVANCING");
     }
 
     public void step() {
-        // Décrémenter compteur de tir
         if (fireCounter > 0) fireCounter--;
 
+        // TOUJOURS scanner et tirer si ennemi visible
+        scanAndShoot();
+
         switch (currentState) {
-            case POSITIONING:
-                stepPositioning();
-                break;
             case ADVANCING:
                 stepAdvancing();
-                break;
-            case SCANNING:
-                stepScanning();
                 break;
             case HOLDING:
                 stepHolding();
@@ -81,57 +68,26 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
         }
     }
 
-    private void stepPositioning() {
-        // Descendre vers SOUTH au début
-        if (stepCounter > 0) {
-            // Vérifier si ennemi en vue pendant le positionnement
-            ArrayList<IRadarResult> radarResults = detectRadar();
-            for (IRadarResult r : radarResults) {
-                if (isEnemy(r.getObjectType())) {
-                    targetDirection = r.getObjectDirection();
-                    targetDistance = r.getObjectDistance();
-                    currentState = HOLDING;
-                    sendLogMessage("Ennemi pendant positionnement - HOLDING");
-                    return;
-                }
-            }
-
-            if (!isHeading(Parameters.SOUTH)) {
-                turnToward(Parameters.SOUTH);
-            } else {
-                IFrontSensorResult front = detectFront();
-                if (front.getObjectType() == IFrontSensorResult.Types.NOTHING) {
-                    stepCounter--;
-                    move();
-                } else {
-                    // Bloqué - passer directement en ADVANCING
-                    stepCounter = ADVANCING_STEPS;
-                    currentState = ADVANCING;
-                    sendLogMessage("Fin positionnement (bloqué) - ADVANCING");
-                }
-            }
-        } else {
-            // Fin du positionnement - passer en ADVANCING
-            stepCounter = ADVANCING_STEPS;
-            currentState = ADVANCING;
-            sendLogMessage("Fin positionnement - ADVANCING");
-        }
-    }
-
-    private void stepAdvancing() {
-        // Vérifier si ennemi en vue
+    private void scanAndShoot() {
         ArrayList<IRadarResult> radarResults = detectRadar();
         for (IRadarResult r : radarResults) {
             if (isEnemy(r.getObjectType())) {
                 targetDirection = r.getObjectDirection();
-                targetDistance = r.getObjectDistance();
-                currentState = HOLDING;
-                sendLogMessage("Ennemi détecté - HOLDING");
+                if (fireCounter == 0) {
+                    fire(targetDirection);
+                    fireCounter = FIRE_LATENCY;
+                }
+                // Passer en HOLDING si pas déjà
+                if (currentState == ADVANCING) {
+                    currentState = HOLDING;
+                    sendLogMessage("Ennemi détecté - HOLDING");
+                }
                 return;
             }
         }
+    }
 
-        // Avancer pendant ~80 steps
+    private void stepAdvancing() {
         if (stepCounter > 0) {
             // Vérifier si bloqué
             IFrontSensorResult front = detectFront();
@@ -150,43 +106,12 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
                 move();
             }
         } else {
-            // Fin de l'avancée - passer en SCANNING
-            currentState = SCANNING;
-            scanStartHeading = getHeading();
-            totalScanned = 0;
-            sendLogMessage("Fin avancée - SCANNING 360°");
-        }
-    }
-
-    private void stepScanning() {
-        // Vérifier si ennemi trouvé pendant le scan
-        ArrayList<IRadarResult> radarResults = detectRadar();
-        for (IRadarResult r : radarResults) {
-            if (isEnemy(r.getObjectType())) {
-                targetDirection = r.getObjectDirection();
-                targetDistance = r.getObjectDistance();
-                currentState = HOLDING;
-                sendLogMessage("Ennemi trouvé pendant scan - HOLDING");
-                return;
-            }
-        }
-
-        // Rotation 360°
-        stepTurn(Parameters.Direction.RIGHT);
-        totalScanned += Parameters.teamBMainBotStepTurnAngle;
-
-        // Vérifier si on a fait un tour complet
-        if (totalScanned >= 2 * Math.PI) {
-            // Scan complet sans ennemi - retour en ADVANCING
+            // Fin de l'avancée - recommencer
             stepCounter = ADVANCING_STEPS;
-            currentState = ADVANCING;
-            sendLogMessage("Scan 360° complet - Retour en ADVANCING");
         }
     }
 
     private void stepHolding() {
-        // S'ARRÊTER et rester en place
-        // Scanner pour retrouver l'ennemi
         ArrayList<IRadarResult> radarResults = detectRadar();
         IRadarResult closestEnemy = null;
         double closestDistance = Double.MAX_VALUE;
@@ -208,27 +133,22 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
             return;
         }
 
-        // Mettre à jour la direction vers l'ennemi
         targetDirection = closestEnemy.getObjectDirection();
-        targetDistance = closestEnemy.getObjectDistance();
 
         // Tourner vers l'ennemi
         if (!isHeading(targetDirection)) {
             turnToward(targetDirection);
         }
 
-        // TIRER sur l'ennemi
+        // Tirer
         if (fireCounter == 0) {
             fire(targetDirection);
             fireCounter = FIRE_LATENCY;
         }
-
-        // Le défenseur reste en place et tire - pas de mouvement en HOLDING
     }
 
     private void stepDodging() {
         if (!dodgingPhase2) {
-            // Phase 1: Monter ou descendre
             if (dodgeCounter > 0) {
                 dodgeCounter--;
                 double dodgeDir = (dodgeDirection == 0) ? Parameters.NORTH : Parameters.SOUTH;
@@ -238,19 +158,16 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
                     move();
                 }
             } else {
-                // Phase 2: Revenir vers WEST
                 dodgingPhase2 = true;
                 dodgeCounter = DODGE_STEPS;
             }
         } else {
-            // Phase 2: Retourner vers la direction principale
             if (!isHeading(Parameters.WEST)) {
                 turnToward(Parameters.WEST);
             } else {
-                // Retour à l'état précédent
-                sendLogMessage("Fin esquive - Retour en " + previousState);
+                sendLogMessage("Fin esquive - Retour");
                 currentState = previousState;
-                stepCounter = ADVANCING_STEPS; // Reset du compteur
+                stepCounter = ADVANCING_STEPS;
                 dodgingPhase2 = false;
             }
         }
@@ -260,7 +177,6 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
         currentState = DODGING;
         dodgeCounter = DODGE_STEPS;
         dodgingPhase2 = false;
-        // Choisir direction basée sur position (alternance simple)
         dodgeDirection = (Math.random() > 0.5) ? 0 : 1;
         sendLogMessage("Obstacle - Esquive vers " + (dodgeDirection == 0 ? "NORTH" : "SOUTH"));
     }
@@ -276,7 +192,6 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
 
     private void turnToward(double targetDir) {
         double diff = targetDir - getHeading();
-        // Normaliser entre -PI et PI
         while (diff > Math.PI) diff -= 2 * Math.PI;
         while (diff < -Math.PI) diff += 2 * Math.PI;
 

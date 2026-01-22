@@ -68,13 +68,13 @@ public class Parameters {
                              teamBMainBotStepTurnAngle = 0.01*Math.PI, //trigonometric unit, angle performed at step turn action
                              teamBMainBotHealth = 300, //FICTIONAL SIMOVIES
                              teamBMainBot1InitX = 2800, //1 unit = 1mm, coordinate of central point
-                             teamBMainBot1InitY = 800, //1 unit = 1mm, coordinate of central point
+                             teamBMainBot1InitY = 1400, //1 unit = 1mm, coordinate of central point - EN BAS
                              teamBMainBot1InitHeading = WEST, //clockwise trigonometric unit, according to screen pixel coordinate reference
                              teamBMainBot2InitX = 2800, //1 unit = 1mm, coordinate of central point
-                             teamBMainBot2InitY = 1000, //1 unit = 1mm, coordinate of central point
+                             teamBMainBot2InitY = 1500, //1 unit = 1mm, coordinate of central point - EN BAS
                              teamBMainBot2InitHeading = WEST, //clockwise trigonometric unit, according to screen pixel coordinate reference
                              teamBMainBot3InitX = 2800, //1 unit = 1mm, coordinate of central point
-                             teamBMainBot3InitY = 1200, //1 unit = 1mm, coordinate of central point
+                             teamBMainBot3InitY = 1600, //1 unit = 1mm, coordinate of central point - EN BAS
                              teamBMainBot3InitHeading = WEST; //clockwise trigonometric unit, according to screen pixel coordinate reference
 
   public static final String teamBSecondaryBotBrainClassName = "algorithms.TeamBSecondaryBotMarssoMougamadoubougary"; //class given by name; is supposed to extends robotsimulator.Brain
@@ -86,10 +86,10 @@ public class Parameters {
                              teamBSecondaryBotStepTurnAngle = 0.01*Math.PI, //trigonometric unit, angle performed at step turn action
                              teamBSecondaryBotHealth = 100, //FICTIONAL SIMOVIES
                              teamBSecondaryBot1InitX = 2500, //1 unit = 1mm, coordinate of central point
-                             teamBSecondaryBot1InitY = 800, //1 unit = 1mm, coordinate of central point
+                             teamBSecondaryBot1InitY = 1450, //1 unit = 1mm, coordinate of central point - EN BAS
                              teamBSecondaryBot1InitHeading = WEST, //clockwise trigonometric unit, according to screen pixel coordinate reference
                              teamBSecondaryBot2InitX = 2500, //1 unit = 1mm, coordinate of central point
-                             teamBSecondaryBot2InitY = 1200, //1 unit = 1mm, coordinate of central point
+                             teamBSecondaryBot2InitY = 1550, //1 unit = 1mm, coordinate of central point - EN BAS
                              teamBSecondaryBot2InitHeading = WEST; //clockwise trigonometric unit, according to screen pixel coordinate reference
   
   //-----------------------//
@@ -98,6 +98,6 @@ public class Parameters {
   public static final double bulletVelocity=10,
                              bulletDamage=10,
                              bulletRadius=5,
-                             bulletRange=1000;
+                             bulletRange=1500;
   public static final int bulletFiringLatency=20;
 }
