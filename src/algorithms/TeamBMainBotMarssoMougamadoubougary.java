@@ -1,6 +1,6 @@
 /* ******************************************************
- * Team B Main Bot - Défenseur
- * Stratégie: Avance, détecte, tient et tire (sans scan 360° inutile)
+ * Team B Main Bot - Défenseur Groupé
+ * Stratégie: Avance groupé, si un est bloqué tous reculent ensemble
  * ******************************************************/
 package algorithms;
 
@@ -14,23 +14,18 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
     // États
     private static final int ADVANCING = 0;
     private static final int HOLDING = 1;
-    private static final int DODGING = 2;
+    private static final int RETREAT = 2;  // Reculer en groupe
 
     // Variables d'état
     private int currentState;
-    private int previousState;
     private int stepCounter;
-    private int dodgeCounter;
-    private int dodgeDirection;
-    private boolean dodgingPhase2;
-
-    // Cible en cours
+    private int retreatCounter;
     private double targetDirection;
 
     // Constantes
     private static final double HEADINGPRECISION = 0.01;
     private static final int ADVANCING_STEPS = 100;
-    private static final int DODGE_STEPS = 50;
+    private static final int RETREAT_STEPS = 80;  // Reculer pendant 80 steps
     private static final int FIRE_LATENCY = 20;
 
     private int fireCounter;
@@ -41,16 +36,17 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
 
     public void activate() {
         currentState = ADVANCING;
-        previousState = ADVANCING;
         stepCounter = ADVANCING_STEPS;
-        dodgeCounter = 0;
-        dodgingPhase2 = false;
+        retreatCounter = 0;
         fireCounter = 0;
         sendLogMessage("Défenseur B activé - Mode ADVANCING");
     }
 
     public void step() {
         if (fireCounter > 0) fireCounter--;
+
+        // Écouter les messages des coéquipiers
+        checkMessages();
 
         // TOUJOURS scanner et tirer si ennemi visible
         scanAndShoot();
@@ -62,9 +58,21 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
             case HOLDING:
                 stepHolding();
                 break;
-            case DODGING:
-                stepDodging();
+            case RETREAT:
+                stepRetreat();
                 break;
+        }
+    }
+
+    private void checkMessages() {
+        ArrayList<String> messages = fetchAllMessages();
+        for (String msg : messages) {
+            if (msg.equals("BLOCKED") && currentState != RETREAT) {
+                // Un coéquipier est bloqué - tout le monde recule
+                currentState = RETREAT;
+                retreatCounter = RETREAT_STEPS;
+                sendLogMessage("Coéquipier bloqué - RETREAT");
+            }
         }
     }
 
@@ -77,7 +85,7 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
                     fire(targetDirection);
                     fireCounter = FIRE_LATENCY;
                 }
-                // Passer en HOLDING si pas déjà
+                // Passer en HOLDING si on avance
                 if (currentState == ADVANCING) {
                     currentState = HOLDING;
                     sendLogMessage("Ennemi détecté - HOLDING");
@@ -88,17 +96,17 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
     }
 
     private void stepAdvancing() {
-        if (stepCounter > 0) {
-            // Vérifier si bloqué
-            IFrontSensorResult front = detectFront();
-            if (front.getObjectType() != IFrontSensorResult.Types.NOTHING &&
-                front.getObjectType() != IFrontSensorResult.Types.TeamMainBot &&
-                front.getObjectType() != IFrontSensorResult.Types.TeamSecondaryBot) {
-                previousState = ADVANCING;
-                startDodging();
-                return;
-            }
+        // Vérifier si bloqué
+        if (isBlocked()) {
+            // Signaler aux coéquipiers
+            broadcast("BLOCKED");
+            currentState = RETREAT;
+            retreatCounter = RETREAT_STEPS;
+            sendLogMessage("Bloqué - RETREAT + signal");
+            return;
+        }
 
+        if (stepCounter > 0) {
             if (!isHeading(Parameters.WEST)) {
                 turnToward(Parameters.WEST);
             } else {
@@ -106,7 +114,6 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
                 move();
             }
         } else {
-            // Fin de l'avancée - recommencer
             stepCounter = ADVANCING_STEPS;
         }
     }
@@ -126,8 +133,7 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
         }
 
         if (closestEnemy == null) {
-            // Ennemi mort - retour en ADVANCING
-            sendLogMessage("Cible éliminée - Retour en ADVANCING");
+            sendLogMessage("Cible éliminée - ADVANCING");
             stepCounter = ADVANCING_STEPS;
             currentState = ADVANCING;
             return;
@@ -147,38 +153,37 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
         }
     }
 
-    private void stepDodging() {
-        if (!dodgingPhase2) {
-            if (dodgeCounter > 0) {
-                dodgeCounter--;
-                double dodgeDir = (dodgeDirection == 0) ? Parameters.NORTH : Parameters.SOUTH;
-                if (!isHeading(dodgeDir)) {
-                    turnToward(dodgeDir);
-                } else {
-                    move();
-                }
-            } else {
-                dodgingPhase2 = true;
-                dodgeCounter = DODGE_STEPS;
-            }
+    private void stepRetreat() {
+        retreatCounter--;
+
+        if (retreatCounter <= 0) {
+            // Fin du recul - reprendre l'avancée
+            currentState = ADVANCING;
+            stepCounter = ADVANCING_STEPS;
+            sendLogMessage("Fin RETREAT - ADVANCING");
+            return;
+        }
+
+        // Reculer vers EAST (direction opposée à WEST)
+        if (!isHeading(Parameters.EAST)) {
+            turnToward(Parameters.EAST);
         } else {
-            if (!isHeading(Parameters.WEST)) {
-                turnToward(Parameters.WEST);
-            } else {
-                sendLogMessage("Fin esquive - Retour");
-                currentState = previousState;
-                stepCounter = ADVANCING_STEPS;
-                dodgingPhase2 = false;
+            // Vérifier si on peut reculer
+            IFrontSensorResult front = detectFront();
+            if (front.getObjectType() == IFrontSensorResult.Types.NOTHING ||
+                front.getObjectType() == IFrontSensorResult.Types.TeamMainBot ||
+                front.getObjectType() == IFrontSensorResult.Types.TeamSecondaryBot) {
+                move();
             }
+            // Si bloqué derrière, on attend juste
         }
     }
 
-    private void startDodging() {
-        currentState = DODGING;
-        dodgeCounter = DODGE_STEPS;
-        dodgingPhase2 = false;
-        dodgeDirection = (Math.random() > 0.5) ? 0 : 1;
-        sendLogMessage("Obstacle - Esquive vers " + (dodgeDirection == 0 ? "NORTH" : "SOUTH"));
+    private boolean isBlocked() {
+        IFrontSensorResult front = detectFront();
+        return front.getObjectType() != IFrontSensorResult.Types.NOTHING &&
+               front.getObjectType() != IFrontSensorResult.Types.TeamMainBot &&
+               front.getObjectType() != IFrontSensorResult.Types.TeamSecondaryBot;
     }
 
     private boolean isEnemy(IRadarResult.Types type) {
