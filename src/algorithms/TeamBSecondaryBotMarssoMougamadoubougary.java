@@ -84,9 +84,14 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
             }
         }
 
-        if (closestEnemy != null) {
-            targetDirection = closestEnemy.getObjectDirection();
+        if (closestEnemy == null) {
+            // Ennemi mort / plus visible -> retour en SEARCHING
+            currentState = SEARCHING;
+            sendLogMessage("ENNEMI PERDU/ÉLIMINÉ - Retour SEARCHING");
+            return;
         }
+
+        targetDirection = closestEnemy.getObjectDirection();
 
         // TIRER
         if (fireCounter == 0) {

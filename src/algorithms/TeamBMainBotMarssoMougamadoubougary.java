@@ -1,6 +1,6 @@
 /* ******************************************************
  * Team B Main Bot - Défenseur
- * Stratégie: Avance, détecte, tient et tire (sans scan 360° inutile)
+ * Stratégie: Avance, détecte, tient et tire
  * ******************************************************/
 package algorithms;
 
@@ -31,7 +31,7 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
     private static final double HEADINGPRECISION = 0.01;
     private static final int ADVANCING_STEPS = 100;
     private static final int DODGE_STEPS = 50;
-    private static final int FIRE_LATENCY = 20;
+    private static final int FIRE_LATENCY = 5;
 
     private int fireCounter;
 
