@@ -1,25 +1,25 @@
-# Rapport Technique : Modèle d'Acteur dans les Systèmes Multi-Agents
+# Rapport Technique : Modele d'Acteur dans les Systemes Multi-Agents
 ## Application au Simulateur Simovies
 
-**Auteur:** Marsso, Mougamadoubougary
-**Cours:** DAAR - Algorithmique d'Essaims
+**Auteur:** Marsso
+**Cours:** DAAR - Algorithmique d'Essaims  
 **Date:** Janvier 2026
 
 ---
 
-## 1. Introduction et Définition du Problème
+## 1. Introduction et Definition du Probleme
 
 ### 1.1 Contexte
 
-Les Systèmes Multi-Agents (SMA) représentent un paradigme de calcul distribué où plusieurs entités autonomes (agents) interagissent pour résoudre des problèmes complexes. Le **modèle d'acteur** (Actor Model), introduit par Carl Hewitt en 1973, fournit un cadre formel pour la conception de ces systèmes concurrents.
+Les Systemes Multi-Agents (SMA) representent un paradigme de calcul distribue ou plusieurs entites autonomes (agents) interagissent pour resoudre des problemes complexes. Le **modele d'acteur** (Actor Model), introduit par Carl Hewitt en 1973, fournit un cadre formel pour la conception de ces systemes concurrents.
 
-Dans ce projet, nous implémentons des stratégies de combat robotique dans le simulateur **Simovies**, où deux équipes de 5 robots s'affrontent. Chaque robot est un acteur autonome qui :
-- Perçoit son environnement via des capteurs (radar 360°, détection frontale)
-- Prend des décisions locales basées sur des machines à états finis
-- Communique avec ses coéquipiers via broadcast asynchrone
-- Agit sur l'environnement (déplacement, tir)
+Dans ce projet, nous implementons des strategies de combat robotique dans le simulateur **Simovies**, ou deux equipes de 5 robots s'affrontent. Chaque robot est un acteur autonome qui :
+- Percoit son environnement via des capteurs (radar 360 degres, detection frontale)
+- Prend des decisions locales basees sur des machines a etats finis
+- Communique avec ses coequipiers via broadcast asynchrone
+- Agit sur l'environnement (deplacement, tir)
 
-### 1.2 Définition Formelle du Problème
+### 1.2 Definition formelle du probleme
 
 Soit A = {a1, ..., an} un ensemble d'agents et E l'environnement partage.
 
@@ -30,385 +30,226 @@ Chaque agent ai est defini par le tuple (Si, Pi, Ai, delta_i, Ci) ou :
 - delta_i : Si x Oi x Mi -> Si x Ai : fonction de transition
 - Ci : canal de communication (messages recus)
 
-L'objectif est de maximiser une fonction d'utilité collective $U(\mathcal{A})$ représentant le score de l'équipe (ennemis éliminés, survie des robots).
+L'objectif est de maximiser une fonction d'utilite collective U(A) representant le score de l'equipe (ennemis elimines, survie des robots).
 
-### 1.3 Structure de Données
+### 1.3 Structure de donnees et FSM finale
 
-**Machine à États Finis (FSM)** : Chaque robot utilise une FSM pour gérer son comportement :
+**Machine a etats finis (FSM)** : la version finale de notre strategie B utilise des FSM simples, robustes, et fortement locales.
 
-```
-FSM = (Q, Sigma, delta, q0, F)
-- Q : etats {MOVING, FIRING, HUNTING, RETREATING, REGROUPING}
-- Sigma : evenements (ennemi detecte, bloque, message recu)
-- delta : transitions entre etats
-- q0 : etat initial (MOVING)
-```
+- **Main Bot B (Defenseur)** : etats {ADVANCING, HOLDING, DODGING}
+- **Secondary Bot B (Kamikaze)** : etats {SEARCHING, ATTACKING}
 
-**Files de Messages** : Communication inter-agents via broadcast asynchrone :
-- `CMD:FIRING:<tick>` : signal de tir synchronisé
-- `CMD:RETREAT:<tick>` : signal de recul groupé
-- `KAMIKAZE:<id>:<x>:<y>` : position du kamikaze pour tracking
-- `DIR:<N|S|E|W>` : synchronisation de direction
+Cette reduction volontaire d'etats limite les comportements instables (blocage, oscillations) et conserve une forte reactivite temps reel.
+
+**Communication inter-agents (version finale)** :
+- La version finale ne repose pas sur un protocole de synchronisation complexe entre Main Bots.
+- Nous avons teste une variante avec broadcast de position du kamikaze (tracking) et regroupement, mais elle a ete abandonnee (voir Section 5) car elle degradait les performances.
 
 ---
 
-## 2. Analyse Théorique des Algorithmes
+## 2. Analyse theorique des algorithmes
 
-### 2.1 Modèle d'Acteur et Propriétés
+### 2.1 Modele d'acteur et proprietes
 
-Le modèle d'acteur garantit plusieurs propriétés essentielles [Hewitt, 1973] :
+Le modele d'acteur garantit plusieurs proprietes essentielles (Hewitt, Bishop, Steiger, 1973) :
 
-1. **Encapsulation** : Chaque robot maintient un état privé inaccessible directement
-2. **Communication asynchrone** : Les messages sont non-bloquants
-3. **Comportement réactif** : Réponse aux stimuli (perception + messages)
+1. **Encapsulation** : chaque robot maintient un etat prive inaccessible directement
+2. **Communication asynchrone** : les messages sont non bloquants
+3. **Comportement reactif** : reponse aux stimuli (perception + messages)
 
-Notre implémentation respecte ces principes via la séparation stricte :
+Notre implementation correspond au schema suivant (simplifie) :
+
 ```java
 public void step() {
-    processMessages();     // Traitement messages (réactif)
-    switch(state) {        // Comportement selon état
-        case MOVING:  doMoving();  break;
-        case FIRING:  doFiring();  break;
-        // ...
+    // Perception locale (radar, front sensor)
+    // Decision par etat (FSM)
+    switch (state) {
+        case ADVANCING: stepAdvancing(); break;
+        case HOLDING:   stepHolding();   break;
+        case DODGING:   stepDodging();   break;
     }
 }
 ```
 
-### 2.2 Algorithme de Coordination : Synchronisation par Broadcast
+### 2.2 Choix de conception : simplicite et verticalite
 
-L'algorithme de coordination repose sur un protocole de consensus simple :
+Dans un environnement temps reel, ajouter des etats de coordination (regroupement, chasse, consensus) peut augmenter :
+- le nombre de transitions,
+- les cas limites (messages obsoletes),
+- les risques de blocage collectif.
 
-```
-ALGORITHME : Synchronisation de Groupe
-ENTRÉE : message m reçu
-SORTIE : changement d'état synchronisé
+Nous avons donc privilegie une strategie **verticale** et **simple** :
+- un robot qui voit une cible passe en engagement,
+- un robot qui ne voit rien continue la pression vers l'Ouest,
+- l'evitement reste local et court.
 
-1. SI m = "CMD:FIRING:t" ET état ≠ FIRING ALORS
-2.     état <- FIRING
-3.     localNoEnemyCounter <- 0
-4. FIN SI
+Ce choix favorise un comportement stable et reproductible.
 
-5. SI m = "CMD:RETREAT:t" ET état ≠ RETREATING ALORS
-6.     état <- RETREATING
-7.     initEscapeTurn()
-8. FIN SI
-```
+### 2.3 Variante testee : tracking kamikaze + regroupement (non retenue)
 
-**Complexite** : O(|M|) par tick, ou |M| est le nombre de messages recus.
+Nous avons teste une variante dans laquelle :
+- le kamikaze broadcastait regulierement une position estimee (x, y),
+- les Main Bots tentaient de suivre cette position via un etat de chasse / regroupement.
+- le tout devait permettre une chasse groupee donc plus puissante
 
-### 2.3 Algorithme de Chasse (Hunting)
+En pratique, cette variante a augmente :
+- les blocages (forteresse coincee contre des obstacles, car lorsque un est bloque ils le sont tous),
+- les mauvais angles de tir (rotation excessive, tirs allies),
+- la complexite (et donc les bugs).
 
-L'état HUNTING implémente un suivi de position :
-
-```
-ALGORITHME : Hunting vers Kamikaze
-ENTRÉE : position kamikaze (kx, ky), position locale (mx, my)
-SORTIE : direction de déplacement
-
-1. SI ennemi détecté localement ALORS
-2.     broadcast("CMD:FIRING")
-3.     état <- FIRING
-4.     RETOUR
-5. FIN SI
-
-6. dist = sqrt((kx - mx)^2 + (ky - my)^2)
-
-7. SI dist < HUNTING_CLOSE_DIST ALORS
-8.     huntingNoEnemyCounter++
-9.     SI huntingNoEnemyCounter > TIMEOUT ALORS
-10.        état <- MOVING
-11.    FIN SI
-12. SINON
-13.    direction <- atan2(ky - my, kx - mx)
-14.    tryMoveTowardAngle(direction)
-15. FIN SI
-```
-
-### 2.4 Comparaison avec la Littérature
-
-| Approche | Coordination | Communication | Complexité |
-|----------|--------------|---------------|------------|
-| Notre approche | Broadcast sync | Asynchrone | O(n×|M|) |
-| Ant Colony [Starzec 2019] | Phéromones | Indirecte | O(n²) |
-| BDI Agents [Cardoso 2021] | Plans partagés | Synchrone | O(n×|Plans|) |
-
-Notre approche se distingue par sa **simplicité** et sa **robustesse** aux défaillances partielles, au détriment d'une coordination moins fine qu'un système BDI.
+La version finale supprime ce mecanisme et obtient de meilleurs resultats, cependant l'ancienne version est disponible dans les classes OldTeamB... 
 
 ---
 
-## 3. Présentation des Algorithmes Implémentés
+## 3. Presentation des algorithmes implementes
 
-### 3.1 Stratégie B - "Fantom Danger" (Stratégie Préférée)
+### 3.1 Strategie B - "Fantom Danger" (version finale)
 
-#### 3.1.1 Main Bot - Défenseur Groupé Synchronisé
+### 3.1.1 Main Bot B - Defenseur vertical autonome
 
-**Principe** : Les 3 robots principaux se déplacent en groupe synchronisé et réagissent collectivement aux événements.
+**Principe** :
+- Avance vers WEST par segments.
+- Des qu'un ennemi est detecte au radar, bascule en HOLDING et engage la cible.
+- Si un obstacle est detecte en frontal (non allie), declenche un DODGING court (NORTH ou SOUTH), puis reprend la direction WEST.
 
-**États et Transitions** :
+**FSM** :
 
 ```
-        ┌─────────────────────────────────────────┐
-        │              MOVING                      │
-        │  (déplacement aléatoire N/S/E/W sync)   │
-        └──────────┬──────────────┬───────────────┘
-                   │              │
-           ennemi  │              │ KAMIKAZE msg
-           détecté │              │
-                   ▼              ▼
-        ┌──────────────┐    ┌─────────────┐
-        │   FIRING     │    │   HUNTING   │
-        │ (freeze+tir) │    │ (vers kaze) │
-        └──────┬───────┘    └──────┬──────┘
-               │                   │
-               │ timeout           │ proche+timeout
-               ▼                   ▼
-        ┌──────────────────────────────────────────┐
-        │              MOVING                       │
-        └──────────────────────────────────────────┘
+ADVANCING --(ennemi detecte)--> HOLDING --(plus d'ennemi)--> ADVANCING
+     |
+     +--(obstacle)--> DODGING --(fin esquive)--> etat precedent
 ```
 
-**Code clé - Gestion FIRING (freeze total)** :
+**Code cle (idee)** :
 ```java
-private void doFiring() {
-    // Freeze total : pas de move(), uniquement turn + fire
-    IRadarResult enemy = findClosestEnemy();
+// Scan rapide + tir cadence
+scanAndShoot();
 
-    if (enemy != null) {
-        broadcast(enemySeenMsg());
-        if (!isHeading(enemy.getObjectDirection())) {
-            turnToward(enemy.getObjectDirection());
-        } else if (fireCooldown == 0) {
-            fire(enemy.getObjectDirection());
-            fireCooldown = FIRE_LATENCY;
-        }
-    }
-}
+// Etat ADVANCING : avance vers l'Ouest, esquive si bloque
+// Etat HOLDING   : vise + tire sur l'ennemi le plus proche
+// Etat DODGING   : mouvement court vertical, puis retour
 ```
 
-#### 3.1.3 Mécanisme Anti-Friendly Fire : "Freeze on Fire"
+### 3.1.2 Secondary Bot B - Kamikaze agressif simple
 
-**Problème identifié** : Lorsque plusieurs Main Bots se déplacent et tirent simultanément, il y a un risque de friendly fire (tir allié) car les robots peuvent se retrouver dans la trajectoire de tir d'un coéquipier.
+**Principe** :
+- Cherche en permanence via radar.
+- Des qu'un ennemi est detecte : ATTACKING (fonce pour le bloquer).
+- Si l'ennemi disparait du radar (eliminee ou hors champ) : retour immediat en SEARCHING.
 
-**Solution implémentée** : Protocole de synchronisation "Freeze on Fire"
-
-Quand un Main Bot tire, il broadcast un message `SHOOTING` qui force tous les autres Main Bots à s'arrêter temporairement (freeze). Cela garantit que :
-1. Les trajectoires de tir sont dégagées
-2. Les robots ne se croisent pas pendant le tir
-3. La précision collective est améliorée
-
-**Diagramme de séquence** :
+**FSM** :
 ```
-Main Bot A          Main Bot B          Main Bot C
-    |                   |                   |
-    |--- SHOOTING ----->|                   |
-    |--- SHOOTING ------------------------->|
-    |                   |                   |
-    | [tire]            | [freeze 20 ticks] | [freeze 20 ticks]
-    | [freeze 20 ticks] |                   |
-    |                   |                   |
-    | [fin freeze]      | [fin freeze]      | [fin freeze]
-    |                   |                   |
+SEARCHING <-> ATTACKING
 ```
 
-**Implémentation** :
-```java
-// Variables
-private int freezeUntil = 0;
-private static final int FREEZE_DURATION = 20;
+Ce comportement simple evite la poursuite "a vide" et maintient une pression constante, cela permet de bloquer les robots adverses et provoquer des bugs.
 
-// Réception du signal SHOOTING
-if (msg.equals("SHOOTING")) {
-    freezeUntil = tick + FREEZE_DURATION;
-}
+### 3.2 Strategie A - "KD Runners" (comparaison)
 
-// Lors du tir
-if (enemy != null && fireCooldown == 0) {
-    fire(enemy.getObjectDirection());
-    broadcast("SHOOTING");  // Signaler aux autres
-    freezeUntil = tick + FREEZE_DURATION;
-}
+**Principe** :
+- Les secondary sont des eclaireurs, ils cherchent les ennemis envoient la position puis passe en mode esquive (mouvements aleatoires larges pour esquiver les balles et garder l'attention de l'ennemi)
+- les main sont des chasseurs, des qu'ils recoivent la position ennemis ils accelerent pour les chasser
 
-// Dans les méthodes de déplacement
-if (tick < freezeUntil) {
-    return;  // Pas de mouvement pendant freeze
-}
-```
-
-**Avantages** :
-- Élimine le risque de friendly fire pendant les tirs
-- Améliore la coordination groupée
-- Coût négligeable (freeze de 20 ticks = ~0.5 seconde)
-
-#### 3.1.2 Secondary Bot - Kamikaze avec Tracking
-
-**Principe** : Robot suicide qui fonce sur les ennemis et broadcast sa position pour guider les Main Bots.
-
-**Innovation** : Tracking de position estimée pour communication :
-```java
-private void myMove() {
-    myX += Parameters.teamBSecondaryBotSpeed * Math.cos(getHeading());
-    myY += Parameters.teamBSecondaryBotSpeed * Math.sin(getHeading());
-    move();
-}
-
-// Broadcast régulier de position
-if (broadcastCooldown <= 0) {
-    broadcast("KAMIKAZE:" + myId + ":" + myX + ":" + myY);
-    broadcastCooldown = BROADCAST_INTERVAL;
-}
-```
-
-### 3.2 Stratégie A - "KD Runners" (Comparaison)
-
-**Main Bot** : Patrouille + Rush vers scout + Esquive en U
-**Secondary Bot** : Éclaireur avec mouvement évasif aléatoire
-
-La stratégie A est plus **offensive** mais moins **coordonnée**. Elle repose sur un signal simple ("ENEMY_FOUND") sans positionnement précis.
+La strategie A (equipe A) a finalement servi de comparaison interne, elle perdait en continu contre tout les bots car trop sensibles aux blocages et bugs :
+- comportements plus offensifs et plus mobiles,
+- coordination plus faible,
+- performances moins stables face a des adversaires agressifs.
 
 ---
 
-## 4. Méthodologie de Test
+## 4. Methodologie de test
 
-### 4.1 Protocole Expérimental
+### 4.1 Protocole experimental
 
 **Configuration** :
-- Arène : 3000 × 2000 mm
-- Équipe A : spawn côté gauche (X ≈ 200-500)
-- Équipe B : spawn côté droit bas (X ≈ 2500-2800, Y ≈ 1400-1600)
+- Arene : 3000 x 2000 mm
+- Equipe A : spawn cote gauche (X ~ 200-500)
+- Equipe B : spawn cote droit bas (X ~ 2500-2800)
 
-**Métriques mesurées** :
-1. Taux de victoire (% parties gagnées)
-2. Robots survivants en fin de partie
-3. Temps moyen avant premier contact
-4. Efficacité du tir (tirs touchés / tirs totaux)
+**Metriques observees** :
+1. Taux de victoire (parties gagnees)
+2. Nombre de robots survivants en fin de partie (qualitatif)
+3. Stabilite du comportement (blocages / oscillations)
 
-### 4.2 Jeux de Données
+### 4.2 Jeux de donnees et resultats
 
-Tests effectués contre différents adversaires :
-- **BootingBerzerk** : Stratégie agressive de référence
-- **CampBot** : Stratégie défensive statique
-- **RandomFire** : Baseline aléatoire
+Tests effectues sur **10 parties** par adversaire :
 
-Chaque configuration testée sur **20 parties** pour significativité statistique.
+| Adversaire        | Victoires | Defaites | Taux |
+|------------------|----------:|---------:|-----:|
+| BootingBerzerk   | 9         | 1        | 90%  |
+| CampFire         | 10        | 0        | 100% |
+| RandomFire       | 10        | 0        | 100% |
 
-### 4.3 Résultats de Performance
-
-**Taux de victoire Stratégie B vs adversaires** :
-
-| Adversaire | Victoires | Défaites | Nul | Taux |
-|------------|-----------|----------|-----|------|
-| BootingBerzerk | 12 | 6 | 2 | 60% |
-| CampBot | 17 | 2 | 1 | 85% |
-| RandomFire | 19 | 0 | 1 | 95% |
-
-**Analyse** : La stratégie B excelle contre les adversaires passifs (CampBot) grâce à la coordination groupée. Elle reste compétitive contre Berzerk grâce au freeze en FIRING qui maximise la puissance de feu collective.
-
-**Robots survivants moyens (sur 20 parties vs Berzerk)** :
-
-| Métrique | Stratégie A | Stratégie B |
-|----------|-------------|-------------|
-| Main Bots survivants | 1.2 ± 0.8 | 2.1 ± 0.7 |
-| Secondary survivants | 0.3 ± 0.5 | 0.1 ± 0.3 |
-
-La stratégie B conserve plus de Main Bots grâce à la synchronisation défensive.
+**Observations** :
+- Contre **BootingBerzerk**, la strategie B finale gagne 9/10, la defaite survenant typiquement lors d'un enchainement defavorable (angles + collisions).
+- Contre **CampFire**, victoire systematique, mais de nombreux robots restent vivants longtemps (style defensif proche).
+- Contre **RandomFire**, victoire systematique grace a la regularite et la pression continue.
 
 ---
 
-## 5. Discussion et Analyse Critique
+## 5. Discussion et analyse critique
 
-### 5.1 Forces de l'Approche
+### 5.1 Forces de l'approche finale
 
-1. **Coordination efficace** : Le broadcast synchrone permet une réaction collective rapide
-2. **Robustesse** : La perte d'un robot n'affecte pas la coordination
-3. **Adaptabilité** : L'état HUNTING permet de répondre aux signaux des kamikazes
+1. **Simplicite robuste** : peu d'etats, peu de transitions, moins de cas limites
+2. **Verticalite efficace** : angles de tir plus propres, moins de rotations inutiles
+3. **Reactivite** : bascule rapide en engagement des qu'une cible est visible
+4. **Tolerance aux defaillances** : la perte d'un robot n'interrompt pas le comportement des autres
 
-### 5.2 Limitations Identifiées
+### 5.2 Limites identifiees
 
-1. **Estimation de position** : L'intégration du déplacement accumule des erreurs
-2. **Pas de prédiction** : Les tirs visent la position actuelle, pas anticipée
-3. **Broadcast global** : Tous les messages sont reçus par tous, pas de communication ciblée
+1. **Pas de strategie de formation explicite** : la cohesion de groupe est emergente, pas controlee
+2. **Tir non predictif** : vise la direction actuelle, sans anticipation de trajectoire
+3. **Evitement local** : le DODGING peut parfois conduire a des detours sous-optimaux
+4. **Peu aggressif** : le manque d'aggressivite peut conduire a un etat ou les kamikaz meurent et tout les autres survivent car ils ne se croisent pas (donc defaite aux points)
 
-### 5.3 Comparaison avec Algorithmes d'Essaims
+### 5.3 Retour d'experience : pourquoi la coordination par tracking a degrade les performances
 
-Par rapport aux approches classiques d'intelligence en essaim [Chakraborty & Kar, 2017] :
+La variante "kamikaze + tracking + forteresse qui suit" a ete testee, mais :
+- la forteresse se bloquait plus souvent,
+- les Main Bots se retrouvaient dans de mauvais angles pour tirer,
+- la complexite augmentait les comportements incoherents.
 
-| Caractéristique | Notre approche | PSO | ACO |
-|-----------------|----------------|-----|-----|
-| Mémoire | États locaux | Position + vélocité | Phéromones |
-| Communication | Broadcast direct | Fitness partagé | Stigmergie |
-| Convergence | Immédiate | Itérative | Itérative |
-| Optimalité | Sous-optimale | Proche optimal | Proche optimal |
+Conclusion : **la verticalite et la simplicite** apportent un meilleur compromis que la coordination explicite. Garantir une coordination de groupe et eviter aux maximums de separer le groupe ou le bloquer permet de garder une puissance de feu considerable et de souvent debuter les combats a 2 ou 3 contre 1. Cependant, contre des strategies peu aggressives, cela peut se retourner contre nous car il y'a un manque de detection.
 
-Notre approche sacrifie l'optimalité pour la **réactivité temps-réel**, essentielle en combat.
+### 5.4 Ameliorations possibles
 
-### 5.4 Améliorations Proposées
-
-1. **Filtre de Kalman** pour la position : Réduire l'erreur d'estimation
-2. **Tir prédictif** : Anticiper la trajectoire ennemie
-3. **Formation dynamique** : Adapter l'espacement selon la situation
+1. Tir semi-predictif (estimation simple de mouvement ennemi)
+2. Regles de spacing legeres (eviter la collision entre allies sans regroupement force)
+3. Ajuster dynamiquement la cadence de tir selon la distance (proche = plus rapide)
+4. Detecter les ennemis et les chasser
 
 ---
 
-## 6. Conclusion et Perspectives
+## 6. Conclusion et perspectives
 
 ### 6.1 Bilan
 
-Ce projet démontre l'applicabilité du modèle d'acteur aux systèmes multi-agents robotiques. La stratégie B implémentée combine :
-- **Coordination par broadcast** pour la synchronisation
-- **Machines à états** pour le comportement individuel
-- **Tracking de position** pour le suivi des kamikazes
+Ce projet illustre l'applicabilite du modele d'acteur aux systemes multi-agents robotiques :
+- acteurs autonomes (robots) avec etat prive,
+- perception locale,
+- decisions par FSM,
+- communication eventuelle (variante testee).
 
-Les résultats expérimentaux valident l'efficacité de l'approche groupée face à diverses stratégies adverses.
+Les resultats experimentaux montrent que la version finale de la strategie B, **plus simple et plus verticale**, est la plus efficace sur notre suite de tests, avec des taux de victoire eleves et une meilleure stabilite.
 
-### 6.2 Perspectives sur l'Algorithmique d'Essaims
+### 6.2 Perspectives
 
-L'intelligence en essaim offre des perspectives prometteuses pour les SMA :
-
-1. **Scalabilité** : Les algorithmes décentralisés passent à l'échelle naturellement
-2. **Robustesse** : L'absence de point de contrôle central évite les défaillances critiques
-3. **Émergence** : Des comportements complexes émergent de règles simples
-
-Pour le simulateur Simovies, des extensions possibles incluent :
-- Implémentation de **phéromones virtuelles** pour le marquage de zones
-- Algorithmes de **flocking** pour les formations
-- **Apprentissage par renforcement** multi-agent (MARL) pour l'adaptation
-
-### 6.3 Lien avec ROS et Applications Réelles
-
-Le Robot Operating System (ROS) implémente un modèle similaire avec :
-- **Nodes** = Acteurs autonomes
-- **Topics** = Canaux de broadcast
-- **Services** = Communication synchrone
-
-Les principes développés dans ce projet sont directement transférables à des applications robotiques réelles.
+Des extensions envisageables incluent :
+- un tir plus intelligent (anticipation),
+- une formation dynamique legere (sans regroupement rigide),
+- des mecanismes d'exploration plus varies lorsque l'ennemi est absent.
 
 ---
 
-## Références
+## References
 
-[1] C. Hewitt, P. Bishop, R. Steiger. "A Universal Modular ACTOR Formalism for Artificial Intelligence", IJCAI 1973.
-
-[2] A. Chakraborty, A.K. Kar. "Swarm Intelligence: A Review of Algorithms", Nature-Inspired Computing and Optimization, 2017.
-
-[3] M. Starzec, G. Starzec, A. Byrski, W. Turek. "Distributed ant colony optimization based on actor model", Parallel Computing, 2019.
-
-[4] W. van der Hoek, M. Wooldridge. "Multi-Agent Systems", Handbook of Knowledge Representation, 2007.
-
+[1] C. Hewitt, P. Bishop, R. Steiger. "A Universal Modular ACTOR Formalism for Artificial Intelligence", IJCAI 1973.  
+[2] A. Chakraborty, A.K. Kar. "Swarm Intelligence: A Review of Algorithms", Nature-Inspired Computing and Optimization, 2017.  
+[3] M. Starzec, G. Starzec, A. Byrski, W. Turek. "Distributed ant colony optimization based on actor model", Parallel Computing, 2019.  
+[4] W. van der Hoek, M. Wooldridge. "Multi-Agent Systems", Handbook of Knowledge Representation, 2007.  
 [5] R.C. Cardoso, A. Ferrando. "A Review of Agent-Based Programming for Multi-Agent Systems", Computers, 2021.
 
 ---
-
-## Annexe : Structure des Fichiers
-
-```
-DAAR_Final_Project/
-├── src/algorithms/
-│   ├── TeamBMainBotMarssoMougamadoubougary.java     (Stratégie B - Main)
-│   ├── TeamBSecondaryBotMarssoMougamadoubougary.java (Stratégie B - Kamikaze)
-│   ├── TeamAMainBotMarssoMougamadoubougary.java     (Stratégie A - Main)
-│   └── TeamASecondaryBotMarssoMougamadoubougary.java (Stratégie A - Scout)
-├── src/characteristics/Parameters.java
-├── beans/algorithms/*.class
-├── jars/simulator.jar
-└── RAPPORT_FINAL.md
 ```

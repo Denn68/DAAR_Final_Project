@@ -22,7 +22,7 @@ public class Parameters {
   //---TEAM-A-PARAMETERS---//
   //-----------------------//
   public static final String teamAName = "KD Runners";
-  public static final String teamAMainBotBrainClassName = "algorithms.BootingBerzerk"; //class given by name; is supposed to extends robotsimulator.Brain
+  public static final String teamAMainBotBrainClassName = "algorithms.RandomFire"; //class given by name; is supposed to extends robotsimulator.Brain
   public static final String teamAMainBotAvatar = "avatars/cyclope.png"; //path relative to location of ant build.xml file
   public static final double teamAMainBotRadius = 50, //1 unit = 1mm, body radius
                              teamAMainBotFrontalDetectionRange = 300, //1 unit = 1mm, range of frontal sensor
@@ -68,13 +68,13 @@ public class Parameters {
                              teamBMainBotStepTurnAngle = 0.01*Math.PI, //trigonometric unit, angle performed at step turn action
                              teamBMainBotHealth = 300, //FICTIONAL SIMOVIES
                              teamBMainBot1InitX = 2800, //1 unit = 1mm, coordinate of central point
-                             teamBMainBot1InitY = 1400, //1 unit = 1mm, coordinate of central point - EN BAS
+                             teamBMainBot1InitY = 800, //1 unit = 1mm, coordinate of central point
                              teamBMainBot1InitHeading = WEST, //clockwise trigonometric unit, according to screen pixel coordinate reference
                              teamBMainBot2InitX = 2800, //1 unit = 1mm, coordinate of central point
-                             teamBMainBot2InitY = 1500, //1 unit = 1mm, coordinate of central point - EN BAS
+                             teamBMainBot2InitY = 1000, //1 unit = 1mm, coordinate of central point
                              teamBMainBot2InitHeading = WEST, //clockwise trigonometric unit, according to screen pixel coordinate reference
                              teamBMainBot3InitX = 2800, //1 unit = 1mm, coordinate of central point
-                             teamBMainBot3InitY = 1600, //1 unit = 1mm, coordinate of central point - EN BAS
+                             teamBMainBot3InitY = 1200, //1 unit = 1mm, coordinate of central point
                              teamBMainBot3InitHeading = WEST; //clockwise trigonometric unit, according to screen pixel coordinate reference
 
   public static final String teamBSecondaryBotBrainClassName = "algorithms.TeamBSecondaryBotMarssoMougamadoubougary"; //class given by name; is supposed to extends robotsimulator.Brain
@@ -86,10 +86,10 @@ public class Parameters {
                              teamBSecondaryBotStepTurnAngle = 0.01*Math.PI, //trigonometric unit, angle performed at step turn action
                              teamBSecondaryBotHealth = 100, //FICTIONAL SIMOVIES
                              teamBSecondaryBot1InitX = 2500, //1 unit = 1mm, coordinate of central point
-                             teamBSecondaryBot1InitY = 1450, //1 unit = 1mm, coordinate of central point - EN BAS
+                             teamBSecondaryBot1InitY = 800, //1 unit = 1mm, coordinate of central point
                              teamBSecondaryBot1InitHeading = WEST, //clockwise trigonometric unit, according to screen pixel coordinate reference
                              teamBSecondaryBot2InitX = 2500, //1 unit = 1mm, coordinate of central point
-                             teamBSecondaryBot2InitY = 1550, //1 unit = 1mm, coordinate of central point - EN BAS
+                             teamBSecondaryBot2InitY = 1200, //1 unit = 1mm, coordinate of central point
                              teamBSecondaryBot2InitHeading = WEST; //clockwise trigonometric unit, according to screen pixel coordinate reference
   
   //-----------------------//

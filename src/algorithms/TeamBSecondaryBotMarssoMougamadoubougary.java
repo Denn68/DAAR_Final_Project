@@ -15,11 +15,9 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
     private static final int ATTACKING = 1;
 
     private static final double HEADING_PRECISION = 0.05;
-    private static final int FIRE_LATENCY = 15;
     private static final int BROADCAST_INTERVAL = 3;  // Broadcast tres frequent
 
     private int state;
-    private int fireCounter;
     private int broadcastCooldown;
     private double targetDir;
 
@@ -30,7 +28,6 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
 
     public void activate() {
         state = SEARCHING;
-        fireCounter = 0;
         broadcastCooldown = 0;
         targetDir = Parameters.WEST;
 
@@ -43,7 +40,6 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
     }
 
     public void step() {
-        if (fireCounter > 0) fireCounter--;
         if (broadcastCooldown > 0) broadcastCooldown--;
 
         // Toujours scanner pour les ennemis
@@ -60,17 +56,11 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
                 broadcastCooldown = BROADCAST_INTERVAL;
             }
 
-            // Tirer
-            if (fireCounter == 0) {
-                fire(targetDir);
-                fireCounter = FIRE_LATENCY;
-            }
-
             // Foncer vers l'ennemi
             if (!isHeading(targetDir)) {
                 turnToward(targetDir);
             } else {
-                myMove();
+                move();
             }
         } else {
             // Pas d'ennemi visible - avancer vers WEST
@@ -78,7 +68,7 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
             if (!isHeading(Parameters.WEST)) {
                 turnToward(Parameters.WEST);
             } else {
-                myMove();
+                move();
             }
         }
     }
@@ -98,32 +88,7 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
             }
         }
 
-        if (closestEnemy == null) {
-            // Ennemi mort / plus visible -> retour en SEARCHING
-            currentState = SEARCHING;
-            sendLogMessage("ENNEMI PERDU/ÉLIMINÉ - Retour SEARCHING");
-            return;
-        }
-
-        targetDirection = closestEnemy.getObjectDirection();
-
-        // TIRER
-        if (fireCounter == 0) {
-            fire(targetDirection);
-            fireCounter = FIRE_LATENCY;
-        }
-
-        // FONCER (jamais d'arrêt)
-        if (!isHeading(targetDirection)) {
-            turnToward(targetDirection);
-        } else {
-            move();
-        }
-    }
-
-    private boolean isEnemy(IRadarResult.Types type) {
-        return type == IRadarResult.Types.OpponentMainBot ||
-               type == IRadarResult.Types.OpponentSecondaryBot;
+        return closest;
     }
 
     private boolean isHeading(double dir) {
