@@ -1,10 +1,6 @@
 /* ******************************************************
- * Team B Main Bot - Strategie Groupee Aggressive
- *
- * - Avance en groupe vers WEST
- * - Tir synchronise quand ennemi detecte
- * - Suit les kamikazes quand ils signalent
- * - Deblocage intelligent
+ * Team B Main Bot - Défenseur
+ * Stratégie: Avance, détecte, tient et tire
  * ******************************************************/
 package algorithms;
 
@@ -23,38 +19,16 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
     private static final int HUNTING = 2;
 
     // Constantes
-    private static final double HEADING_TOL = 0.1;
-    private static final int FIRE_LATENCY = 15;
-    private static final int SEGMENT_STEPS = 80;
-    private static final int STUCK_LIMIT = 10;
-    private static final int HUNT_TIMEOUT = 150;
-    private static final int FIRE_TIMEOUT = 100;
-    private static final int FREEZE_DURATION = 20;  // Durée du freeze après tir allié
+    private static final double HEADINGPRECISION = 0.01;
+    private static final int ADVANCING_STEPS = 100;
+    private static final int DODGE_STEPS = 50;
+    private static final int FIRE_LATENCY = 5;
 
-    // Etat
-    private int state;
-    private int freezeUntil;  // Tick jusqu'auquel le mouvement est bloqué
-    private int tick;
-    private int fireCooldown;
-    private int stuckCounter;
-    private int noEnemyCounter;
-    private int huntTimer;
+    private int fireCounter;
 
-    // Direction
-    private double currentDir;
-    private int segmentRemaining;
-    private boolean turnRight;
-
-    // Position
-    private double myX, myY;
-
-    // Hunting
-    private double targetX, targetY;
-    private int lastKamikazeMsg;
-
-    private Random random;
-
-    public TeamBMainBotMarssoMougamadoubougary() { super(); }
+    public TeamBMainBotMarssoMougamadoubougary() {
+        super();
+    }
 
     public void activate() {
         state = MOVING;

@@ -97,13 +97,33 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
                 }
             }
         }
-        return closest;
+
+        if (closestEnemy == null) {
+            // Ennemi mort / plus visible -> retour en SEARCHING
+            currentState = SEARCHING;
+            sendLogMessage("ENNEMI PERDU/ÉLIMINÉ - Retour SEARCHING");
+            return;
+        }
+
+        targetDirection = closestEnemy.getObjectDirection();
+
+        // TIRER
+        if (fireCounter == 0) {
+            fire(targetDirection);
+            fireCounter = FIRE_LATENCY;
+        }
+
+        // FONCER (jamais d'arrêt)
+        if (!isHeading(targetDirection)) {
+            turnToward(targetDirection);
+        } else {
+            move();
+        }
     }
 
-    private void myMove() {
-        myX += Parameters.teamBSecondaryBotSpeed * Math.cos(getHeading());
-        myY += Parameters.teamBSecondaryBotSpeed * Math.sin(getHeading());
-        move();
+    private boolean isEnemy(IRadarResult.Types type) {
+        return type == IRadarResult.Types.OpponentMainBot ||
+               type == IRadarResult.Types.OpponentSecondaryBot;
     }
 
     private boolean isHeading(double dir) {
