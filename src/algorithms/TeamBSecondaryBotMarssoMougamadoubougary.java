@@ -1,10 +1,6 @@
 /* ******************************************************
- * Team B Secondary Bot - Kamikaze
- * Stratégie: Cherche ennemis, fonce dessus en tirant sans jamais s'arrêter
- *
- * Patch:
- *  - Au lieu d'envoyer (x,y) faux, envoie un hint fiable: direction + distance
- *  - Si plus d'ennemi en SUICIDE pendant N steps -> retour SEARCHING
+ * Team B Secondary Bot - Kamikaze Agressif
+ * Fonce vers l'ennemi, tire, et guide les Main Bots
  * ******************************************************/
 package algorithms;
 
@@ -14,136 +10,115 @@ import characteristics.IRadarResult;
 import java.util.ArrayList;
 
 public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
-    // États
+
     private static final int SEARCHING = 0;
-    private static final int SUICIDE = 1;
+    private static final int ATTACKING = 1;
 
-    private int currentState;
-    private double targetDirection;
+    private static final double HEADING_PRECISION = 0.05;
+    private static final int FIRE_LATENCY = 15;
+    private static final int BROADCAST_INTERVAL = 3;  // Broadcast tres frequent
 
-    // Constantes
-    private static final double HEADINGPRECISION = 0.01;
-    private static final int FIRE_LATENCY = 20;
-    private static final int BROADCAST_INTERVAL = 10;
-
-    // Si ennemi "disparaît" en SUICIDE -> reset
-    private static final int NO_ENEMY_RESET_STEPS = 60;
-
+    private int state;
     private int fireCounter;
+    private int broadcastCooldown;
+    private double targetDir;
 
-    // Position tracking (plus utilisé pour guider les mains)
-    private static int botCounter = 0;
-    private int myId;
-    private int broadcastCooldown = 0;
-
-    private int noEnemyCounter = 0;
+    // Position tracking
+    private double myX, myY;
 
     public TeamBSecondaryBotMarssoMougamadoubougary() { super(); }
 
     public void activate() {
-        currentState = SEARCHING;
+        state = SEARCHING;
         fireCounter = 0;
         broadcastCooldown = 0;
-        noEnemyCounter = 0;
+        targetDir = Parameters.WEST;
 
-        myId = botCounter++;
-        sendLogMessage("Kamikaze B" + myId + " activé");
+        // Position initiale basee sur le heading initial
+        // Les secondary B commencent a X~2500
+        myX = 2500;
+        myY = 1500;
+
+        sendLogMessage("Kamikaze B pret - WEST");
     }
 
     public void step() {
         if (fireCounter > 0) fireCounter--;
         if (broadcastCooldown > 0) broadcastCooldown--;
 
-        switch (currentState) {
-            case SEARCHING: stepSearching(); break;
-            case SUICIDE:   stepSuicide();   break;
-        }
-    }
+        // Toujours scanner pour les ennemis
+        IRadarResult enemy = findClosestEnemy();
 
-    private void stepSearching() {
-        ArrayList<IRadarResult> radarResults = detectRadar();
+        if (enemy != null) {
+            // Ennemi trouve!
+            state = ATTACKING;
+            targetDir = enemy.getObjectDirection();
 
-        for (IRadarResult r : radarResults) {
-            if (isEnemy(r.getObjectType())) {
-                targetDirection = r.getObjectDirection();
-                double dist = r.getObjectDistance();
-
-                currentState = SUICIDE;
-                noEnemyCounter = 0;
-
-                // ✅ hint direction+distance
-                broadcast("KAMIKAZE_HINT:" + myId + ":" + targetDirection + ":" + dist);
+            // Broadcast position aux Main Bots
+            if (broadcastCooldown <= 0) {
+                broadcast("KAMIKAZE:" + (int)myX + ":" + (int)myY);
                 broadcastCooldown = BROADCAST_INTERVAL;
+            }
 
-                sendLogMessage("ENNEMI! SUICIDE + hint");
-                return;
+            // Tirer
+            if (fireCounter == 0) {
+                fire(targetDir);
+                fireCounter = FIRE_LATENCY;
+            }
+
+            // Foncer vers l'ennemi
+            if (!isHeading(targetDir)) {
+                turnToward(targetDir);
+            } else {
+                myMove();
+            }
+        } else {
+            // Pas d'ennemi visible - avancer vers WEST
+            state = SEARCHING;
+            if (!isHeading(Parameters.WEST)) {
+                turnToward(Parameters.WEST);
+            } else {
+                myMove();
             }
         }
-
-        // Avancer vers WEST en recherche
-        if (!isHeading(Parameters.WEST)) turnToward(Parameters.WEST);
-        else move();
     }
 
-    private void stepSuicide() {
-        ArrayList<IRadarResult> radarResults = detectRadar();
-        IRadarResult closestEnemy = null;
-        double closestDistance = Double.MAX_VALUE;
+    private IRadarResult findClosestEnemy() {
+        ArrayList<IRadarResult> results = detectRadar();
+        IRadarResult closest = null;
+        double minDist = Double.MAX_VALUE;
 
-        for (IRadarResult r : radarResults) {
-            if (isEnemy(r.getObjectType())) {
-                if (r.getObjectDistance() < closestDistance) {
-                    closestEnemy = r;
-                    closestDistance = r.getObjectDistance();
+        for (IRadarResult r : results) {
+            if (r.getObjectType() == IRadarResult.Types.OpponentMainBot ||
+                r.getObjectType() == IRadarResult.Types.OpponentSecondaryBot) {
+                if (r.getObjectDistance() < minDist) {
+                    closest = r;
+                    minDist = r.getObjectDistance();
                 }
             }
         }
-
-        if (closestEnemy != null) {
-            targetDirection = closestEnemy.getObjectDirection();
-            noEnemyCounter = 0;
-
-            // broadcast hint régulièrement
-            if (broadcastCooldown <= 0) {
-                broadcast("KAMIKAZE_HINT:" + myId + ":" + targetDirection + ":" + closestDistance);
-                broadcastCooldown = BROADCAST_INTERVAL;
-            }
-        } else {
-            noEnemyCounter++;
-            if (noEnemyCounter >= NO_ENEMY_RESET_STEPS) {
-                currentState = SEARCHING;
-                noEnemyCounter = 0;
-                sendLogMessage("Plus d'ennemi -> SEARCHING");
-                return;
-            }
-        }
-
-        // Tir
-        if (fireCounter == 0) {
-            fire(targetDirection);
-            fireCounter = FIRE_LATENCY;
-        }
-
-        // Fonce
-        if (!isHeading(targetDirection)) turnToward(targetDirection);
-        else move();
+        return closest;
     }
 
-    private boolean isEnemy(IRadarResult.Types type) {
-        return type == IRadarResult.Types.OpponentMainBot ||
-               type == IRadarResult.Types.OpponentSecondaryBot;
+    private void myMove() {
+        myX += Parameters.teamBSecondaryBotSpeed * Math.cos(getHeading());
+        myY += Parameters.teamBSecondaryBotSpeed * Math.sin(getHeading());
+        move();
     }
 
     private boolean isHeading(double dir) {
-        return Math.abs(Math.sin(getHeading() - dir)) < HEADINGPRECISION;
+        double diff = Math.abs(normalizeAngle(getHeading() - dir));
+        return diff < HEADING_PRECISION;
     }
 
-    private void turnToward(double targetDir) {
-        double diff = targetDir - getHeading();
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
+    private void turnToward(double dir) {
+        double diff = normalizeAngle(dir - getHeading());
+        stepTurn(diff > 0 ? Parameters.Direction.RIGHT : Parameters.Direction.LEFT);
+    }
 
-        if (diff > 0) stepTurn(Parameters.Direction.RIGHT);
-        else stepTurn(Parameters.Direction.LEFT);
+    private double normalizeAngle(double a) {
+        while (a > Math.PI) a -= 2 * Math.PI;
+        while (a < -Math.PI) a += 2 * Math.PI;
+        return a;
     }
 }
