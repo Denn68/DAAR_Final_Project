@@ -15,7 +15,7 @@ import characteristics.IRadarResult;
 import java.util.ArrayList;
 import java.util.Random;
 
-public class TeamBMainBotMarssoMougamadoubougary extends Brain {
+public class OldTeamBMainBotMarssoMougamadoubougary extends Brain {
 
     // Etats
     private static final int MOVING = 0;
@@ -54,7 +54,7 @@ public class TeamBMainBotMarssoMougamadoubougary extends Brain {
 
     private Random random;
 
-    public TeamBMainBotMarssoMougamadoubougary() { super(); }
+    public OldTeamBMainBotMarssoMougamadoubougary() { super(); }
 
     public void activate() {
         state = MOVING;

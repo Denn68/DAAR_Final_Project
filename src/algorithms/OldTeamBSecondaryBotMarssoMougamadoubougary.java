@@ -9,7 +9,7 @@ import characteristics.Parameters;
 import characteristics.IRadarResult;
 import java.util.ArrayList;
 
-public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
+public class OldTeamBSecondaryBotMarssoMougamadoubougary extends Brain {
 
     private static final int SEARCHING = 0;
     private static final int ATTACKING = 1;
@@ -26,7 +26,7 @@ public class TeamBSecondaryBotMarssoMougamadoubougary extends Brain {
     // Position tracking
     private double myX, myY;
 
-    public TeamBSecondaryBotMarssoMougamadoubougary() { super(); }
+    public OldTeamBSecondaryBotMarssoMougamadoubougary() { super(); }
 
     public void activate() {
         state = SEARCHING;
